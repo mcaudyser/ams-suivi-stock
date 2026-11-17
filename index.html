@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AMS Suivi de stock</title>
+<link rel="icon" href="logo-ams.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{
+  --bg:#f4f6f9; --surface:#ffffff; --line:#dde3ea; --fg:#18222e; --muted:#5d6b7a;
+  --accent:#d97400; --accent-fg:#ffffff; --accent-soft:#fdf1d6;
+  --ok:#2f7d4f; --ok-soft:#e2f2e8; --warn:#1d5fa8; --warn-soft:#e3edf8; --bad:#b4232a; --bad-soft:#fbe1e2;
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0f151c; --surface:#17202a; --line:#2a3644; --fg:#e6ecf2; --muted:#9aa8b6;
+  --accent:#e8890c; --accent-fg:#ffffff; --accent-soft:#3a2c0e;
+  --ok:#5fc187; --ok-soft:#173226; --warn:#7fb0ea; --warn-soft:#1c2d42; --bad:#f07a7f; --bad-soft:#3d1a1c; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:10px}
+.brand{font-weight:700;font-size:18px;display:flex;align-items:center;gap:10px}
+.brand img{display:block;height:46px;width:auto}
+.who{display:flex;align-items:center;gap:10px;margin-left:auto;font-size:13px;color:var(--muted);flex-wrap:wrap}
+select,input,textarea,button{font:inherit;color:inherit}
+select,input,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav{display:flex;gap:4px;overflow-x:auto}
+nav button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 12px;font-weight:500;color:var(--muted);cursor:pointer;white-space:nowrap}
+nav button[aria-current="page"]{color:var(--fg);border-bottom-color:var(--accent)}
+.btn{background:var(--accent);color:var(--accent-fg);border:0;border-radius:8px;padding:10px 18px;font-weight:700;letter-spacing:.02em;cursor:pointer;box-shadow:0 2px 6px rgba(217,116,0,.35)}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line);font-weight:500;box-shadow:none}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn:hover{filter:brightness(1.07)}
+.btn:disabled{opacity:.5;cursor:default}
+main{padding-block:20px 48px;display:flex;flex-direction:column;gap:16px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.bar h1{font-size:20px;margin:0;margin-right:auto}
+.bar input[type=search]{flex:1 1 220px}
+h2.sec{font-size:16px;margin:8px 0 0}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+.chip{display:flex;align-items:baseline;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.chip b{font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums}
+.chip span{font-size:13px;color:var(--muted)}
+.chip.bad b{color:var(--bad)} .chip.warn b{color:var(--warn)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td.num{font-family:var(--mono)}
+.sub{font-size:12px;color:var(--muted)}
+.ref{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.bas{background:var(--bad-soft);color:var(--bad)} .pill.haut{background:var(--warn-soft);color:var(--warn)} .pill.none{color:var(--muted)}
+.cell{display:inline-block;min-width:30px;text-align:center;padding:2px 6px;border-radius:4px;font-family:var(--mono);position:relative}
+.cell.bas{background:var(--bad-soft);color:var(--bad);font-weight:600} .cell.haut{background:var(--warn-soft);color:var(--warn)} .cell.zero{color:var(--muted)}
+.cell.top{background:var(--ok-soft);color:var(--ok);font-weight:700}
+.cell.alert::after{content:"";position:absolute;top:-2px;right:-4px;width:7px;height:7px;border-radius:50%;background:var(--bad)}
+td.me,th.me{background:var(--accent-soft)}
+.famrow td{background:var(--accent-soft);font-weight:700;cursor:pointer;border-top:2px solid var(--line)}
+.famrow td:first-child{box-shadow:inset 4px 0 0 var(--accent)}
+.famrow td.num{font-size:16px}
+.tog{background:none;border:0;padding:0;font-weight:700;font-size:17px;cursor:pointer;display:inline-flex;gap:8px;align-items:center;text-align:left}
+.tog .chev{display:inline-block;width:12px;transition:transform .15s;color:var(--accent)}
+.tog[aria-expanded="true"] .chev{transform:rotate(90deg)}
+tr.child td:first-child{padding-left:34px}
+table.fit{table-layout:fixed;min-width:640px}
+table.fit td,table.fit th{white-space:normal;padding:8px 6px}
+table.fit th:first-child{width:30%}
+table.fit th{font-size:10.5px;letter-spacing:.04em}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted)}
+.type{font-weight:600}
+.type.entree{color:var(--ok)} .type.sortie{color:var(--bad)} .type.transfert{color:var(--accent)} .type.inventaire{color:var(--warn)}
+.note{font-size:13px;color:var(--muted);margin:0}
+.empty{padding:28px;text-align:center;color:var(--muted);white-space:normal}
+.thin{width:72px;text-align:right}
+.overlay{position:fixed;inset:0;background:rgba(10,16,24,.5);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;z-index:20;overflow-y:auto}
+.modal{background:var(--surface);border-radius:10px;width:100%;max-width:560px;padding:20px;display:flex;flex-direction:column;gap:14px;border:1px solid var(--line)}
+.modal h2{margin:0;font-size:18px}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--bg);padding:4px;border-radius:8px}
+.seg button{border:0;background:none;padding:8px 4px;border-radius:6px;font-weight:500;cursor:pointer;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:600}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label,.step .lab{font-size:13px;font-weight:600}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.step{display:flex;flex-direction:column;gap:6px}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opts button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:14px}
+.opts button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+.list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;max-height:240px;overflow-y:auto}
+.list button{background:none;border:0;border-bottom:1px solid var(--line);text-align:left;padding:8px 12px;cursor:pointer}
+.list button:last-child{border-bottom:0}
+.list button[aria-pressed="true"]{background:var(--accent-soft);font-weight:600}
+.picked{font-size:14px;padding:8px 12px;border-radius:8px;background:var(--accent-soft)}
+.preview{border-radius:8px;padding:10px 12px;font-size:14px;background:var(--bg)}
+.preview.warn{background:var(--warn-soft);color:var(--warn)} .preview.bad{background:var(--bad-soft);color:var(--bad)}
+.actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;z-index:30;max-width:calc(100% - 32px)}
+.login{max-width:380px;margin:8vh auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px;display:flex;flex-direction:column;gap:14px}
+.login img{height:80px;width:auto;align-self:center}
+.login h1{font-size:20px;margin:0;text-align:center}
+.err{color:var(--bad);font-size:14px}
+.demo{background:var(--accent-soft);font-size:13px;padding:6px 10px;border-radius:6px}
+textarea{width:100%;min-height:140px;font-family:var(--mono);font-size:12px}
+@media (max-width:560px){.row2,.row3{grid-template-columns:1fr}.who{margin-left:0;width:100%}}
+@media (prefers-reduced-motion:no-preference){.modal{animation:pop .15s ease-out}@keyframes pop{from{transform:translateY(8px);opacity:.6}}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+
+<script type="module">
+/* ============================================================
+   CONFIGURATION
+   Collez ici la configuration de votre projet Firebase
+   (Console Firebase > Paramètres du projet > Vos applications).
+   Laissez null pour utiliser le mode démo (données dans le navigateur).
+   ============================================================ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD5SlU_CZ5qwJs2_uWnWsU-vLAB0WqUios",
+  authDomain: "ams-stock.firebaseapp.com",
+  projectId: "ams-stock",
+  storageBucket: "ams-stock.firebasestorage.app",
+  messagingSenderId: "66724512272",
+  appId: "1:66724512272:web:85877a9a38058405efc095"
+};
+const FB_VERSION = '10.12.2';
+
+const AGENCES=['Chartres','Rouen','Paris Est','IDF','Caen','Lille'];
+const FAMILLES_DEFAUT=['Galerie','Pupitre','Serrure Multilock','Attelage','Kit bois','Meubles Edström'];
+const VEHICULES_DEFAUT=[["Petit","Peugeot","Partner","Standard (M)"],["Petit","Peugeot","Partner","Long (XL)"],["Moyen","Peugeot","Expert","Standard (M)"],["Moyen","Peugeot","Expert","Long (XL)"],["Grand","Peugeot","Boxer","L2 H1"],["Grand","Peugeot","Boxer","L2 H2"],["Grand","Peugeot","Boxer","L3 H2"],["Grand","Peugeot","Boxer","L3 H3"],["Grand","Peugeot","Boxer","L4 H2"],["Grand","Peugeot","Boxer","L4 H3"],["Petit","Citroën","Berlingo","Standard (M)"],["Petit","Citroën","Berlingo","Long (XL)"],["Moyen","Citroën","Jumpy","Standard (M)"],["Moyen","Citroën","Jumpy","Long (XL)"],["Grand","Citroën","Jumper","L2 H1"],["Grand","Citroën","Jumper","L2 H2"],["Grand","Citroën","Jumper","L3 H2"],["Grand","Citroën","Jumper","L3 H3"],["Grand","Citroën","Jumper","L4 H2"],["Grand","Citroën","Jumper","L4 H3"],["Petit","Renault","Kangoo Van","L1"],["Petit","Renault","Kangoo Van","L2"],["Moyen","Renault","Trafic","L1 H1"],["Moyen","Renault","Trafic","L1 H2"],["Moyen","Renault","Trafic","L2 H1"],["Moyen","Renault","Trafic","L2 H2"],["Grand","Renault","Master","L2 H2"],["Grand","Renault","Master","L3 H2"],["Grand","Renault","Master","L3 H3"],["Grand","Renault","Master","L4 H3"],["Petit","Fiat","Doblo","Standard (M)"],["Petit","Fiat","Doblo","Long (XL)"],["Moyen","Fiat","Scudo","Standard (M)"],["Moyen","Fiat","Scudo","Long (XL)"],["Grand","Fiat","Ducato","L2 H1"],["Grand","Fiat","Ducato","L2 H2"],["Grand","Fiat","Ducato","L3 H2"],["Grand","Fiat","Ducato","L3 H3"],["Grand","Fiat","Ducato","L4 H2"],["Grand","Fiat","Ducato","L4 H3"],["Petit","Opel","Combo Cargo","Standard (M)"],["Petit","Opel","Combo Cargo","Long (XL)"],["Moyen","Opel","Vivaro","Standard (M)"],["Moyen","Opel","Vivaro","Long (XL)"],["Grand","Opel","Movano","L2 H1"],["Grand","Opel","Movano","L2 H2"],["Grand","Opel","Movano","L3 H2"],["Grand","Opel","Movano","L3 H3"],["Grand","Opel","Movano","L4 H2"],["Grand","Opel","Movano","L4 H3"],["Petit","Volkswagen","Caddy Cargo","Standard"],["Petit","Volkswagen","Caddy Cargo","Maxi"],["Moyen","Volkswagen","Transporter","L1 H1"],["Moyen","Volkswagen","Transporter","L2 H1"],["Moyen","Volkswagen","ID.Buzz Cargo","Unique"],["Grand","Volkswagen","Crafter","L3 H3"],["Grand","Volkswagen","Crafter","L4 H3"],["Grand","Volkswagen","Crafter","L5 H3"],["Petit","Ford","Transit Courier","Unique"],["Petit","Ford","Transit Connect","L1"],["Petit","Ford","Transit Connect","L2"],["Moyen","Ford","Transit Custom","L1 H1"],["Moyen","Ford","Transit Custom","L2 H1"],["Moyen","Ford","Transit City","L1 H1"],["Grand","Ford","Transit 2T","L2 H2"],["Grand","Ford","Transit 2T","L3 H2"],["Grand","Ford","Transit 2T","L4 H3"],["Grand","Ford","Transit City","L2 H2"],["Petit","Nissan","Townstar","L1"],["Petit","Nissan","Townstar","L2"],["Moyen","Nissan","Primastar","L1 H1"],["Moyen","Nissan","Primastar","L2 H1"],["Grand","Nissan","Interstar","L2 H2"],["Grand","Nissan","Interstar","L3 H2"],["Grand","Nissan","Interstar","L3 H3"],["Grand","Nissan","Interstar","L4 H3"],["Petit","Toyota","Proace City","Standard (M)"],["Petit","Toyota","Proace City","Long (XL)"],["Moyen","Toyota","Proace","Standard (M)"],["Moyen","Toyota","Proace","Long (XL)"],["Grand","Toyota","Proace Max","L2 H1"],["Grand","Toyota","Proace Max","L2 H2"],["Grand","Toyota","Proace Max","L3 H2"],["Grand","Toyota","Proace Max","L3 H3"],["Grand","Toyota","Proace Max","L4 H2"],["Grand","Toyota","Proace Max","L4 H3"],["Petit","Mercedes-Benz","Citan","Long"],["Petit","Mercedes-Benz","Citan","Extra-Long"],["Moyen","Mercedes-Benz","Vito","Compact"],["Moyen","Mercedes-Benz","Vito","Long"],["Moyen","Mercedes-Benz","Vito","Extra-Long"],["Grand","Mercedes-Benz","Sprinter","37 Normal"],["Grand","Mercedes-Benz","Sprinter","37 Surélevé"],["Grand","Mercedes-Benz","Sprinter","43 Normal"],["Grand","Mercedes-Benz","Sprinter","43 Surélevé"],["Grand","Mercedes-Benz","Sprinter","43 Long Normal"],["Grand","Mercedes-Benz","Sprinter","43 Long Surélevé"],["Grand","Iveco","Daily","7,3 m³ H1"],["Grand","Iveco","Daily","9 m³ H1"],["Grand","Iveco","Daily","10,8 m³ H2"],["Grand","Iveco","Daily","12 m³ H2"],["Grand","Iveco","Daily","13,4 m³ H3"],["Grand","Iveco","Daily","16 m³ H2"],["Grand","Iveco","Daily","18 m³ H3"],["Grand","Iveco","Daily","19,6 m³ H3"],["Moyen","Iveco","eJolly","Court"],["Moyen","Iveco","eJolly","Long"],["Grand","Iveco","eSuperJolly","L3 H2"],["Grand","Iveco","eSuperJolly","L3 H3"],["Grand","Iveco","eSuperJolly","L4 H2"],["Grand","Iveco","eSuperJolly","L4 H3"],["Moyen","Renault Trucks","Trafic","L1 H1"],["Moyen","Renault Trucks","Trafic","L1 H2"],["Moyen","Renault Trucks","Trafic","L2 H1"],["Moyen","Renault Trucks","Trafic","L2 H2"],["Grand","Renault Trucks","Master","L2 H2"],["Grand","Renault Trucks","Master","L3 H2"],["Grand","Renault Trucks","Master","L3 H3"],["Grand","Renault Trucks","Master","L4 H3"],["Moyen","Kia","PV5","Cargo (L2H1)"],["Moyen","Farizon","V7E","Unique"],["Grand","Farizon","SV","L2 H3"],["Grand","Farizon","SV","L3 H3"],["Grand","MAN","TGE","L3 H3"],["Grand","MAN","TGE","L4 H3"],["Grand","MAN","TGE","L5 H3"],["Moyen","Renault","Estafette E-Tech","Unique"],["Grand","Maxus","Deliver 9","À préciser"],["Grand","Maxus","eDeliver 9","À préciser"],["Moyen","Maxus","Deliver 7","À préciser"],["Moyen","Maxus","eDeliver 7","À préciser"],["Moyen","Maxus","eDeliver 5","À préciser"]];   // [gabarit, marque, modèle, version] — catalogue vérifié du 17/11/2026
+const TOUTES='Toutes';
+const MOTIFS=['Vente / pose','Casse','Perte','Retour fournisseur','Autre'];
+
+/* ============================================================
+   Utilitaires
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uniq=a=>[...new Set(a)];
+const key=(id,ag)=>id+'__'+ag;
+const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+let tt;function toast(m){$('toastRoot').innerHTML=`<div class="toast" role="status">${esc(m)}</div>`;clearTimeout(tt);tt=setTimeout(()=>$('toastRoot').innerHTML='',3800)}
+
+/* ============================================================
+   Couche de données : Firebase ou mode démo (navigateur)
+   Les deux exposent les mêmes fonctions.
+   ============================================================ */
+function emptyData(){return{familles:[],articles:[],stock:{},seuils:{},seuilsFam:{},mouvements:[],vehicules:[],users:[]}}
+
+function applyMove(stock,m){ // retourne les nouvelles quantités {key:qte}
+  const g=(ag)=>stock[key(m.articleId,ag)]?.qte||0, out={};
+  if(m.type==='entree')out[key(m.articleId,m.ag)]=g(m.ag)+m.q;
+  if(m.type==='sortie')out[key(m.articleId,m.ag)]=g(m.ag)-m.q;
+  if(m.type==='transfert'){out[key(m.articleId,m.ag)]=g(m.ag)-m.q;out[key(m.articleId,m.to)]=g(m.to)+m.q}
+  if(m.type==='inventaire'){m.diff=m.q-g(m.ag);out[key(m.articleId,m.ag)]=m.q}
+  return out;
+}
+
+function LocalBackend(){
+  const K='ams-stock-demo-v2';let D,listeners=[],authCb=null,current=null;
+  try{D=JSON.parse(localStorage.getItem(K))}catch(e){}
+  if(!D||!D.articles)D=seedDemo();
+  const save=()=>{try{localStorage.setItem(K,JSON.stringify(D))}catch(e){};listeners.forEach(f=>f(D))};
+  const nid=()=>Math.random().toString(36).slice(2,10);
+  return{
+    demo:true,
+    onAuth(cb){authCb=cb;setTimeout(()=>cb(current),0)},
+    async login(email){current={uid:'demo-'+norm(email),email};if(!D.users.find(u=>u.id===current.uid))D.users.push({id:current.uid,email,role:'admin',agence:''});save();authCb(current)},
+    async logout(){current=null;authCb(null)},
+    subscribe(cb){listeners.push(cb);cb(D)},
+    async profile(u){return D.users.find(x=>x.id===u.uid)},
+    async mouvement(m){const up=applyMove(D.stock,m);for(const[k,q]of Object.entries(up)){const[a,ag]=k.split('__');D.stock[k]={articleId:a,agence:ag,qte:q}}
+      D.mouvements.unshift({...m,id:nid()});save()},
+    async setSeuil(a,min,max){if(min==null&&max==null)delete D.seuils[a];else D.seuils[a]={min,max};save()},
+    async setSeuilFam(f,min,max){if(min==null&&max==null)delete D.seuilsFam[f];else D.seuilsFam[f]={famille:f,min,max};save()},
+    async saveArticle(a){if(a.id){const i=D.articles.findIndex(x=>x.id===a.id);D.articles[i]={...D.articles[i],...a}}else D.articles.push({...a,id:nid()});save()},
+    async saveArticles(list){for(const a of list)D.articles.push({...a,id:nid()});save()},
+    async saveFamille(nom){D.familles.push({id:nid(),nom,ordre:D.familles.length});save()},
+    async saveVehicule(v){D.vehicules.push({...v,id:nid()});save()},
+    async setUser(id,p){const u=D.users.find(x=>x.id===id);Object.assign(u,p);save()},
+    async resetDemo(){D=seedDemo();save()}
+  };
+}
+function seedDemo(){
+  let s=7;const r=()=>(s=(s*9301+49297)%233280)/233280;
+  const D=emptyData();
+  D.familles=FAMILLES_DEFAUT.map((n,i)=>({id:'f'+i,nom:n,ordre:i}));
+  const ex=[['Galerie','Renault','Master','L2 H2'],['Galerie','Renault','Master','L3 H2'],['Galerie','Renault','Trafic','L1 H1'],['Galerie','Peugeot','Boxer','L2 H2'],['Galerie','Fiat','Ducato','L2 H2'],
+    ['Pupitre','Renault','Master',TOUTES],['Pupitre','Citroën','Jumpy','Standard (M)'],['Serrure Multilock','Renault','Master',TOUTES],['Serrure Multilock','Ford','Transit Custom',TOUTES],
+    ['Attelage','Peugeot','Boxer',TOUTES],['Attelage','Citroën','Berlingo',TOUTES],['Kit bois','Renault','Trafic','L1 H1'],['Kit bois','Fiat','Ducato','L2 H2']];
+  D.articles=ex.map((e,i)=>({id:'a'+i,famille:e[0],marque:e[1],modele:e[2],version:e[3],ref:'',designation:'',fournisseur:'',actif:true}));
+  [['ED-EXEMPLE-01','Montant 1800 mm (EXEMPLE)'],['ED-EXEMPLE-02','Tablette 1000 × 400 (EXEMPLE)'],['ED-EXEMPLE-03','Tiroir 150 mm (EXEMPLE)']].forEach(([ref,d],i)=>
+    D.articles.push({id:'e'+i,famille:'Meubles Edström',ref,designation:d,fournisseur:'Edström',marque:'',modele:'',version:'',actif:true}));
+  for(const a of D.articles)for(const ag of AGENCES){const main=ag==='Chartres';
+    const q=main?Math.floor(r()*4):(r()<.6?0:1+(r()<.2?1:0));D.stock[key(a.id,ag)]={articleId:a.id,agence:ag,qte:q}}
+  D.seuilsFam={'Galerie':{famille:'Galerie',min:null,max:5},'Serrure Multilock':{famille:'Serrure Multilock',min:1,max:null}};
+  D.seuils={e0:{min:1,max:null}};
+  return D;
+}
+
+async function FirebaseBackend(cfg){
+  const base=`https://www.gstatic.com/firebasejs/${FB_VERSION}/`;
+  const {initializeApp}=await import(base+'firebase-app.js');
+  const A=await import(base+'firebase-auth.js');
+  const F=await import(base+'firebase-firestore.js');
+  const app=initializeApp(cfg),auth=A.getAuth(app),fs=F.getFirestore(app);
+  const D=emptyData();let listeners=[],unsubs=[];
+  const emit=()=>listeners.forEach(f=>f(D));
+  function listen(isAdmin){
+    unsubs.forEach(u=>u());unsubs=[];
+    const col=(name,fn,q)=>unsubs.push(F.onSnapshot(q||F.collection(fs,name),snap=>{fn(snap);emit()},err=>{console.error(name,err);toast('Erreur de lecture ('+name+') : '+err.code)}));
+    col('familles',s=>D.familles=s.docs.map(d=>({id:d.id,...d.data()})));
+    col('articles',s=>D.articles=s.docs.map(d=>({id:d.id,...d.data()})));
+    col('vehicules',s=>D.vehicules=s.docs.map(d=>({id:d.id,...d.data()})));
+    col('stock',s=>{D.stock={};s.docs.forEach(d=>D.stock[d.id]=d.data())});
+    col('seuils',s=>{D.seuils={};s.docs.forEach(d=>D.seuils[d.id]=d.data())});
+    col('seuilsFamilles',s=>{D.seuilsFam={};s.docs.forEach(d=>D.seuilsFam[d.data().famille]=d.data())});
+    col('mouvements',s=>D.mouvements=s.docs.map(d=>({id:d.id,...d.data()})),F.query(F.collection(fs,'mouvements'),F.orderBy('date','desc'),F.limit(500)));
+    if(isAdmin)col('users',s=>D.users=s.docs.map(d=>({id:d.id,...d.data()})));
+  }
+  return{
+    demo:false,
+    onAuth(cb){A.onAuthStateChanged(auth,u=>cb(u?{uid:u.uid,email:u.email}:null))},
+    async login(email,pw){await A.signInWithEmailAndPassword(auth,email,pw)},
+    async resetPassword(email){await A.sendPasswordResetEmail(auth,email)},
+    async logout(){unsubs.forEach(u=>u());unsubs=[];await A.signOut(auth)},
+    subscribe(cb){listeners.push(cb);cb(D)},
+    async profile(u){
+      const ref=F.doc(fs,'users',u.uid);let snap=await F.getDoc(ref);
+      if(!snap.exists()){await F.setDoc(ref,{email:u.email,role:'attente',agence:'',creeLe:new Date().toISOString()});snap=await F.getDoc(ref)}
+      const p={id:u.uid,...snap.data()};if(p.role!=='attente')listen(p.role==='admin');return p;
+    },
+    async mouvement(m){
+      await F.runTransaction(fs,async tx=>{
+        const ags=uniq([m.ag,m.to].filter(Boolean)),cur={};
+        for(const ag of ags){const s=await tx.get(F.doc(fs,'stock',key(m.articleId,ag)));if(s.exists())cur[key(m.articleId,ag)]=s.data()}
+        const up=applyMove(cur,m);
+        for(const[k,q]of Object.entries(up)){const[a,ag]=k.split('__');tx.set(F.doc(fs,'stock',k),{articleId:a,agence:ag,qte:q})}
+        tx.set(F.doc(F.collection(fs,'mouvements')),m);
+      });
+    },
+    async setSeuil(a,min,max){const r=F.doc(fs,'seuils',a);if(min==null&&max==null)await F.deleteDoc(r);else await F.setDoc(r,{articleId:a,min,max})},
+    async setSeuilFam(f,min,max){const r=F.doc(fs,'seuilsFamilles',encodeURIComponent(f));if(min==null&&max==null)await F.deleteDoc(r);else await F.setDoc(r,{famille:f,min,max})},
+    async saveArticle(a){const{id,...d}=a;if(id)await F.updateDoc(F.doc(fs,'articles',id),d);else await F.addDoc(F.collection(fs,'articles'),d)},
+    async saveArticles(list){for(let i=0;i<list.length;i+=400){const b=F.writeBatch(fs);list.slice(i,i+400).forEach(a=>b.set(F.doc(F.collection(fs,'articles')),a));await b.commit()}},
+    async saveFamille(nom){await F.addDoc(F.collection(fs,'familles'),{nom,ordre:D.familles.length})},
+    async saveVehicule(v){await F.addDoc(F.collection(fs,'vehicules'),v)},
+    async setUser(id,p){await F.updateDoc(F.doc(fs,'users',id),p)},
+    async initFamilles(){const b=F.writeBatch(fs);FAMILLES_DEFAUT.forEach((n,i)=>b.set(F.doc(F.collection(fs,'familles')),{nom:n,ordre:i}));await b.commit()}
+  };
+}
+
+/* ============================================================
+   État de l'interface
+   ============================================================ */
+let B,D=emptyData(),me=null,profile=null;
+let view='stock',viewAg='Chartres',fQ='',open=new Set(),modal=null,seuilAg='Chartres',seuilFam='',catFam='',editArt=null,histAg='';
+const isAdmin=()=>profile?.role==='admin';
+const myAg=()=>profile?.agence||'';
+const familles=()=>{const f=[...D.familles].sort((a,b)=>(a.ordre??0)-(b.ordre??0)).map(f=>f.nom);
+  return uniq([...f,...D.articles.map(a=>a.famille)].filter(Boolean))};
+const actifs=()=>D.articles.filter(a=>a.actif!==false);
+const art=id=>D.articles.find(a=>a.id===id);
+const qte=(id,ag)=>D.stock[key(id,ag)]?.qte||0;
+// Seuil appliqué à un article : la règle de sa famille, sauf exception propre à l'article. Identique dans toutes les agences.
+function seuil(id){const a=art(id);if(!a)return;const f=D.seuilsFam[a.famille]||{},o=D.seuils[id]||{};
+  const min=o.min??f.min??null,max=o.max??f.max??null;return(min==null&&max==null)?undefined:{min,max}}
+const sum=(ids,ags)=>ids.reduce((s,id)=>s+ags.reduce((t,ag)=>t+qte(id,ag),0),0);
+function etat(id,ag,q=qte(id,ag)){const t=seuil(id,ag);if(!t)return'none';if(t.min!=null&&q<t.min)return'bas';if(t.max!=null&&q>t.max)return'haut';return'ok'}
+const PILL={ok:'OK',bas:'Stock bas',haut:'Surstock',none:'Pas de seuil'};
+const vehOf=a=>a.marque?`${a.marque} ${a.modele}${a.version&&a.version!==TOUTES?' '+a.version:''}`:'';
+const titre=a=>vehOf(a)||a.designation||a.ref||'(sans nom)';
+const detail=a=>[a.ref,vehOf(a)?a.designation:''].filter(Boolean).join(' · ');
+const fullLabel=a=>[a.famille,titre(a),detail(a)].filter(Boolean).join(' – ');
+const allVehicules=()=>[...VEHICULES_DEFAUT.map(v=>({gabarit:v[0],marque:v[1],modele:v[2],version:v[3]})),...D.vehicules];
+function groups(){const q=norm(fQ.trim());
+  return familles().map(f=>({fam:f,items:actifs().filter(a=>a.famille===f&&(!q||norm(fullLabel(a)).includes(q))).sort((x,y)=>titre(x).localeCompare(titre(y),'fr'))})).filter(g=>g.items.length)}
+const isOpen=f=>open.has(f)||!!fQ.trim();
+
+/* ============================================================
+   Écrans
+   ============================================================ */
+function renderLogin(err=''){
+  $('app').innerHTML=`<form class="login" id="lf">
+    <img src="logo-ams.png" alt="AMS Auto Multi Services">
+    <h1>Suivi de stock</h1>
+    ${B.demo?'<p class="demo">Mode démo : aucune base n’est encore branchée. Saisissez n’importe quel e-mail pour essayer l’outil avec des données d’exemple.</p>':''}
+    <div class="field"><label for="le">E-mail</label><input id="le" type="email" autocomplete="username" required></div>
+    ${B.demo?'':'<div class="field"><label for="lp">Mot de passe</label><input id="lp" type="password" autocomplete="current-password" required></div>'}
+    ${err?`<div class="err">${esc(err)}</div>`:''}
+    <button class="btn" type="submit">Se connecter</button>
+    ${B.demo?'':'<button class="btn ghost" type="button" id="forgot">Mot de passe oublié</button>'}
+  </form>`;
+  $('lf').onsubmit=async e=>{e.preventDefault();try{await B.login($('le').value.trim(),$('lp')?.value)}catch(x){renderLogin('E-mail ou mot de passe incorrect.')}};
+  if($('forgot'))$('forgot').onclick=async()=>{const em=$('le').value.trim();if(!em)return renderLogin('Saisissez d’abord votre e-mail.');try{await B.resetPassword(em);toast('E-mail de réinitialisation envoyé.')}catch(x){renderLogin('Impossible d’envoyer l’e-mail. Vérifiez l’adresse.')}};
+}
+function renderWaiting(){
+  $('app').innerHTML=`<div class="login"><img src="logo-ams.png" alt="AMS"><h1>Compte en attente</h1>
+  <p class="note" style="text-align:center">Votre compte (${esc(me.email)}) est créé. Le responsable logistique doit maintenant vous rattacher à votre agence.</p>
+  <button class="btn ghost" id="lo">Se déconnecter</button></div>`;$('lo').onclick=()=>B.logout();
+}
+function shell(){
+  const tabs=[['stock',isAdmin()?'Stock par agence':'Mon stock'],['global','Vue globale'],['alertes',isAdmin()?'Alertes et seuils':'Alertes'],['hist','Historique']];
+  if(isAdmin())tabs.push(['catalogue','Catalogue'],['users','Utilisateurs']);
+  if(!tabs.find(t=>t[0]===view))view='stock';
+  let demoRole='';
+  if(B.demo)demoRole=`<label for="demoRole">Rôle (démo)</label><select id="demoRole">${AGENCES.map(a=>`<option value="${a}" ${profile.role==='agence'&&profile.agence===a?'selected':''}>Responsable ${a}</option>`).join('')}<option value="admin" ${isAdmin()?'selected':''}>Responsable logistique</option></select>`;
+  return `<header><div class="wrap top">
+    <div class="brand"><img src="logo-ams.png" alt="AMS Auto Multi Services"> Suivi de stock</div>
+    <div class="who">${demoRole||`<span>${esc(me.email)} · ${isAdmin()?'Responsable logistique':'Agence '+esc(myAg())}</span>`}
+      <button class="btn ghost small" id="logout">Déconnexion</button></div></div>
+    <div class="wrap" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between">
+      <nav id="nav">${tabs.map(([k,l])=>`<button data-v="${k}" ${view===k?'aria-current="page"':''}>${l}</button>`).join('')}</nav>
+      <button class="btn" id="newMove">+ Mouvement</button></div></header>
+    <main class="wrap" id="main"></main>`;
+}
+const searchBar=()=>`<input type="search" id="q" placeholder="Rechercher : code, désignation, véhicule" value="${esc(fQ)}">
+  <button class="btn ghost" id="toggleAll">${open.size>=familles().length?'Tout replier':'Tout déplier'}</button>`;
+const famHead=(g,cols)=>`<tr class="famrow" data-fam="${esc(g.fam)}"><td><button class="tog" aria-expanded="${isOpen(g.fam)}"><span class="chev">▸</span>${esc(g.fam)}</button><span class="sub" style="display:block;padding-left:20px">${g.items.length} article${g.items.length>1?'s':''}</span></td>${cols}</tr>`;
+const artCell=a=>`<td><div>${esc(titre(a))}</div>${detail(a)?`<div class="ref">${esc(detail(a))}</div>`:''}</td>`;
+
+function viewStock(){
+  const ag=viewAg,others=AGENCES.filter(a=>a!==ag),all=actifs().map(a=>etat(a.id,ag));let rows='';
+  for(const g of groups()){const ids=g.items.map(a=>a.id),nb=ids.filter(id=>etat(id,ag)==='bas').length,nh=ids.filter(id=>etat(id,ag)==='haut').length;
+    const st=nb?`<span class="pill bas">${nb} en stock bas</span>`:nh?`<span class="pill haut">${nh} en surstock</span>`:'<span class="pill ok">OK</span>';
+    rows+=famHead(g,`<td class="num"><b>${sum(ids,[ag])}</b></td><td>${st}</td><td class="num">${sum(ids,others)}</td>`);
+    if(isOpen(g.fam))rows+=g.items.map(a=>{const e=etat(a.id,ag);return `<tr class="child">${artCell(a)}<td class="num">${qte(a.id,ag)}</td><td><span class="pill ${e}">${PILL[e]}</span></td><td class="num">${sum([a.id],others)}</td></tr>`}).join('')}
+  return `<div class="bar"><h1>Stock ${isAdmin()?'de':'de mon agence :'} ${esc(ag)}</h1>
+    ${isAdmin()?`<select id="viewAg" aria-label="Agence">${AGENCES.map(a=>`<option ${a===ag?'selected':''}>${a}</option>`).join('')}</select>`:''}
+    <button class="btn ghost" id="export">Exporter (Excel)</button></div>
+  <div class="chips"><div class="chip"><b>${sum(actifs().map(a=>a.id),[ag])}</b><span>pièces en stock</span></div>
+    <div class="chip bad"><b>${all.filter(e=>e==='bas').length}</b><span>articles en stock bas</span></div>
+    <div class="chip warn"><b>${all.filter(e=>e==='haut').length}</b><span>en surstock</span></div></div>
+  <div class="bar">${searchBar()}</div>
+  <div class="panel"><table id="tbl"><thead><tr><th>Article</th><th class="num">Quantité</th><th>État</th><th class="num">Autres agences</th></tr></thead>
+  <tbody>${rows||`<tr><td colspan="4" class="empty">${D.articles.length?'Aucun article ne correspond à la recherche.':'Aucun article dans le catalogue pour l’instant.'+(isAdmin()?' Ajoutez-en depuis l’onglet Catalogue.':'')}</td></tr>`}</tbody></table></div>`;
+}
+function viewGlobal(){
+  const mine=isAdmin()?null:myAg();let rows='',grand=0;const shown=[];
+  for(const g of groups()){const ids=g.items.map(a=>a.id),tot=sum(ids,AGENCES);grand+=tot;shown.push(...ids);
+    const fmax=Math.max(...AGENCES.map(a=>sum(ids,[a])));
+    rows+=famHead(g,AGENCES.map(a=>{const al=ids.some(id=>etat(id,a)==='bas'),v=sum(ids,[a]),top=v>0&&v===fmax;
+      return `<td class="num ${a===mine?'me':''}"><span class="cell ${al?'alert':''} ${top?'top':''}" ${al?'title="Au moins un article en stock bas"':''}>${v}</span></td>`}).join('')+`<td class="num"><b>${tot}</b></td>`);
+    if(isOpen(g.fam))rows+=g.items.map(a=>{const imax=Math.max(...AGENCES.map(x=>qte(a.id,x)));
+      return `<tr class="child">${artCell(a)}${AGENCES.map(x=>{const q=qte(a.id,x),e=etat(a.id,x),top=q>0&&q===imax&&e!=='bas';
+        return `<td class="num ${x===mine?'me':''}"><span class="cell ${e==='bas'?'bas':e==='haut'?'haut':top?'top':q===0?'zero':''}" title="${PILL[e]}">${q}</span></td>`}).join('')}<td class="num"><b>${sum([a.id],AGENCES)}</b></td></tr>`}).join('')}
+  const foot=rows?`<tr class="famrow"><td>Total</td>${AGENCES.map(a=>`<td class="num ${a===mine?'me':''}">${sum(shown,[a])}</td>`).join('')}<td class="num">${grand}</td></tr>`:'';
+  return `<div class="bar"><h1>Vue globale, toutes agences</h1><button class="btn ghost" id="export">Exporter (Excel)</button></div>
+  ${mine?'<p class="note">Vous voyez le stock des autres agences en lecture seule, pour savoir à qui demander un transfert.</p>':''}
+  <div class="bar">${searchBar()}</div>
+  <div class="legend"><span><span class="cell bas">0</span> sous le mini</span><span><span class="cell haut">5</span> au-dessus du maxi</span><span><span class="cell top">4</span> agence qui en a le plus</span><span><span class="cell alert">2</span> un article de la famille est en stock bas</span></div>
+  <div class="panel"><table id="tbl" class="fit"><thead><tr><th>Article</th>${AGENCES.map(a=>`<th class="num ${a===mine?'me':''}">${a}</th>`).join('')}<th class="num">Total</th></tr></thead>
+  <tbody>${rows||`<tr><td colspan="${AGENCES.length+2}" class="empty">Aucun article.</td></tr>`}${foot}</tbody></table></div>`;
+}
+function viewAlertes(){
+  const ed=isAdmin(),ags=ed?AGENCES:[myAg()];if(!ed)seuilAg=myAg();if(!seuilFam)seuilFam=familles()[0]||'';
+  const al=[];for(const ag of ags)for(const a of actifs()){const e=etat(a.id,ag);if(e==='bas'||e==='haut')al.push({ag,a,e})}
+  al.sort((x,y)=>(x.e==='bas'?0:1)-(y.e==='bas'?0:1)||x.ag.localeCompare(y.ag));
+  const arows=al.map(({ag,a,e})=>{const t=seuil(a.id,ag);return `<tr><td>${esc(ag)}</td>${artCell(a)}<td class="sub">${esc(a.famille)}</td><td class="num"><b>${qte(a.id,ag)}</b></td><td class="num">${t.min??'–'}</td><td class="num">${t.max??'–'}</td><td><span class="pill ${e}">${PILL[e]}</span></td></tr>`}).join('');
+  let out=`<div class="bar"><h1>${ed?'Alertes et seuils':'Alertes de mon agence'}</h1></div>
+  <h2 class="sec">Alertes en cours (${al.length})</h2>
+  <div class="panel"><table id="tbl"><thead><tr><th>Agence</th><th>Article</th><th>Famille</th><th class="num">Stock</th><th class="num">Mini</th><th class="num">Maxi</th><th>État</th></tr></thead>
+  <tbody>${arows||'<tr><td colspan="7" class="empty">Aucune alerte : tous les stocks suivis sont entre le mini et le maxi.</td></tr>'}</tbody></table></div>`;
+  if(ed){const fr=D.seuilsFam[seuilFam]||{};
+    const srows=actifs().filter(a=>a.famille===seuilFam).map(a=>{const o=D.seuils[a.id]||{},t=seuil(a.id);
+      const inp=k=>`<input class="thin" type="number" min="0" inputmode="numeric" data-sid="${a.id}" data-k="${k}" value="${o[k]??''}" placeholder="${fr[k]!=null?fr[k]:'–'}" aria-label="${k==='min'?'Mini':'Maxi'} ${esc(titre(a))}">`;
+      const regle=t?[t.min!=null?'mini '+t.min:'',t.max!=null?'maxi '+t.max:''].filter(Boolean).join(', ')+(o.min!=null||o.max!=null?' (exception)':' (famille)'):'Aucun seuil';
+      return `<tr>${artCell(a)}<td class="num">${inp('min')}</td><td class="num">${inp('max')}</td><td class="sub">${regle}</td></tr>`}).join('');
+    const finp=k=>`<input class="thin" type="number" min="0" inputmode="numeric" id="ff_${k}" value="${fr[k]??''}" placeholder="–" aria-label="${k==='min'?'Mini':'Maxi'} de la famille">`;
+    out+=`<h2 class="sec">Réglage des seuils</h2>
+    <p class="note">Un seuil se règle pour toute une famille, par exemple « maxi 5 » pour chaque galerie. Il s’applique à chaque article de la famille, dans chaque agence. Laissez vide pour ne pas surveiller. En dessous, vous pouvez faire une exception pour un article précis. Les seuils déclenchent seulement une alerte, jamais un blocage.</p>
+    <div class="bar"><select id="sFam" aria-label="Famille">${familles().map(f=>`<option ${f===seuilFam?'selected':''}>${esc(f)}</option>`).join('')}</select></div>
+    <div class="panel"><table><tbody><tr class="famrow"><td>Règle pour toute la famille ${esc(seuilFam)}</td><td class="num"><label class="sub" for="ff_min">Mini </label>${finp('min')}</td><td class="num"><label class="sub" for="ff_max">Maxi </label>${finp('max')}</td></tr></tbody></table></div>
+    <div class="panel"><table><thead><tr><th>Exceptions par article</th><th class="num">Mini</th><th class="num">Maxi</th><th>Seuil appliqué</th></tr></thead><tbody>${srows||'<tr><td colspan="4" class="empty">Aucun article dans cette famille.</td></tr>'}</tbody></table></div>`}
+  return out;
+}
+function viewHist(){
+  const T={entree:'Entrée',sortie:'Sortie',transfert:'Transfert',inventaire:'Inventaire'};
+  const mv=D.mouvements.filter(m=>isAdmin()?(!histAg||m.ag===histAg||m.to===histAg):(m.ag===myAg()||m.to===myAg()));
+  const rows=mv.map(m=>{const a=art(m.articleId);const dt=new Date(m.date);
+    const qty=m.type==='inventaire'?`${m.q} <span class="sub">(écart ${m.diff>0?'+':''}${m.diff})</span>`:(m.type==='sortie'?'−':m.type==='entree'?'+':'')+m.q;
+    return `<tr><td>${dt.toLocaleDateString('fr-FR')} ${dt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</td>
+    <td><span class="type ${m.type}">${T[m.type]}</span>${m.motif?`<div class="sub">${esc(m.motif)}</div>`:''}</td>
+    <td>${m.type==='transfert'?`${esc(m.ag)} → ${esc(m.to)}`:esc(m.ag)}</td>${a?artCell(a):'<td class="sub">Article supprimé</td>'}<td class="num">${qty}</td><td>${esc(m.userEmail)}</td><td style="white-space:normal">${esc(m.comment)}</td></tr>`}).join('');
+  return `<div class="bar"><h1>Historique des mouvements${isAdmin()?'':' : '+esc(myAg())}</h1>
+    ${isAdmin()?`<select id="histAg" aria-label="Agence"><option value="">Toutes les agences</option>${AGENCES.map(a=>`<option ${a===histAg?'selected':''}>${a}</option>`).join('')}</select>`:''}
+    <button class="btn ghost" id="export">Exporter (Excel)</button></div>
+  <div class="panel"><table id="tbl"><thead><tr><th>Date</th><th>Type</th><th>Agence</th><th>Article</th><th class="num">Qté</th><th>Saisi par</th><th>Commentaire</th></tr></thead>
+  <tbody>${rows||'<tr><td colspan="7" class="empty">Aucun mouvement pour l’instant. Cliquez sur « + Mouvement » pour enregistrer le premier.</td></tr>'}</tbody></table></div>
+  <p class="note">Les 500 derniers mouvements sont affichés.</p>
+  ${B.demo?'<div class="bar"><span class="note">Mode démo : données enregistrées uniquement dans ce navigateur.</span><button class="btn ghost" id="reset">Remettre la démo à zéro</button></div>':''}`;
+}
+function vehSelects(prefix,a){
+  const V=allVehicules(),marques=uniq(V.map(v=>v.marque)).sort((x,y)=>x.localeCompare(y,'fr'));
+  const modeles=a.marque?uniq(V.filter(v=>v.marque===a.marque).map(v=>v.modele)):[];
+  const versions=a.modele?uniq(V.filter(v=>v.marque===a.marque&&v.modele===a.modele).map(v=>v.version)):[];
+  return `<div class="row3">
+    <div class="field"><label for="${prefix}m">Marque</label><select id="${prefix}m"><option value="">Aucun véhicule</option>${marques.map(m=>`<option ${m===a.marque?'selected':''}>${esc(m)}</option>`).join('')}</select></div>
+    <div class="field"><label for="${prefix}o">Modèle</label><select id="${prefix}o" ${a.marque?'':'disabled'}><option value="">Choisir…</option>${modeles.map(m=>`<option ${m===a.modele?'selected':''}>${esc(m)}</option>`).join('')}</select></div>
+    <div class="field"><label for="${prefix}v">Version</label><select id="${prefix}v" ${a.modele?'':'disabled'}><option value="">Choisir…</option><option ${a.version===TOUTES?'selected':''}>${TOUTES}</option>${versions.filter(v=>v!==TOUTES).map(m=>`<option ${m===a.version?'selected':''}>${esc(m)}</option>`).join('')}</select></div></div>`;
+}
+function viewCatalogue(){
+  if(!catFam)catFam=familles()[0]||'';
+  const list=D.articles.filter(a=>a.famille===catFam).sort((x,y)=>titre(x).localeCompare(titre(y),'fr'));
+  const rows=list.map(a=>`<tr>${artCell(a)}<td>${esc(a.fournisseur)}</td><td>${a.actif===false?'<span class="pill none">Archivé</span>':'<span class="pill ok">Actif</span>'}</td><td><button class="btn ghost small" data-edit="${a.id}">Modifier</button></td></tr>`).join('');
+  return `<div class="bar"><h1>Catalogue des articles</h1><button class="btn" id="newArt">+ Article</button></div>
+  <div class="bar"><select id="catFam" aria-label="Famille">${familles().map(f=>`<option ${f===catFam?'selected':''}>${esc(f)}</option>`).join('')}</select>
+    <span class="note">${list.length} article(s) dans cette famille.</span></div>
+  <div class="panel"><table><thead><tr><th>Article</th><th>Fournisseur</th><th>Statut</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="empty">Aucun article dans cette famille.</td></tr>'}</tbody></table></div>
+  <h2 class="sec">Familles</h2>
+  <div class="bar"><span class="note">${familles().map(esc).join(' · ')||'Aucune famille.'}</span></div>
+  <div class="bar"><input id="newFam" placeholder="Nouvelle famille (ex. Échelles)"><button class="btn ghost" id="addFam">Ajouter la famille</button>
+    ${!D.familles.length&&B.initFamilles?'<button class="btn ghost" id="initFam">Créer les familles de départ</button>':''}</div>
+  <h2 class="sec">Importer des articles depuis Excel</h2>
+  <p class="note">Copiez des lignes depuis Excel puis collez-les ici, dans cet ordre de colonnes : Code article · Famille · Marque · Modèle · Version · Désignation · Fournisseur. Les colonnes Marque, Modèle et Version peuvent rester vides (articles Edström par exemple).</p>
+  <textarea id="imp" placeholder="ED-12345&#9;Meubles Edström&#9;&#9;&#9;&#9;Montant 1800 mm&#9;Edström"></textarea>
+  <div class="bar"><button class="btn ghost" id="doImp">Importer ces lignes</button><span class="note" id="impInfo"></span></div>
+  <h2 class="sec">Véhicules</h2>
+  <p class="note">${allVehicules().length} véhicules disponibles (catalogue vérifié du 17/11/2026${D.vehicules.length?` + ${D.vehicules.length} ajouté(s)`:''}). Pour en ajouter un :</p>
+  <div class="row3"><input id="nvMarque" placeholder="Marque"><input id="nvModele" placeholder="Modèle"><input id="nvVersion" placeholder="Version (ex. L2 H2)"></div>
+  <div class="bar"><select id="nvGab"><option>Petit</option><option selected>Moyen</option><option>Grand</option></select><button class="btn ghost" id="addVeh">Ajouter le véhicule</button></div>`;
+}
+function viewUsers(){
+  const rows=D.users.sort((a,b)=>(a.role==='attente'?0:1)-(b.role==='attente'?0:1)).map(u=>`<tr><td>${esc(u.email)}</td>
+    <td><select data-urole="${u.id}" aria-label="Rôle">${[['attente','En attente'],['agence','Responsable d’agence'],['admin','Responsable logistique']].map(([k,l])=>`<option value="${k}" ${u.role===k?'selected':''}>${l}</option>`).join('')}</select></td>
+    <td><select data-uag="${u.id}" aria-label="Agence" ${u.role==='agence'?'':'disabled'}><option value="">–</option>${AGENCES.map(a=>`<option ${a===u.agence?'selected':''}>${a}</option>`).join('')}</select></td></tr>`).join('');
+  return `<div class="bar"><h1>Utilisateurs</h1></div>
+  <p class="note">Pour ajouter quelqu’un : créez son compte (e-mail et mot de passe) dans la console Firebase, rubrique Authentication. À sa première connexion, il apparaît ici « En attente » : choisissez son rôle et son agence.</p>
+  <div class="panel"><table><thead><tr><th>E-mail</th><th>Rôle</th><th>Agence</th></tr></thead><tbody>${rows||'<tr><td colspan="3" class="empty">Aucun utilisateur.</td></tr>'}</tbody></table></div>`;
+}
+
+function render(){
+  if(!me){renderLogin();return}
+  if(!profile)return;
+  if(profile.role==='attente'){renderWaiting();return}
+  if(!isAdmin())viewAg=myAg();
+  const y=window.scrollY;
+  $('app').innerHTML=shell();
+  const V={stock:viewStock,global:viewGlobal,alertes:viewAlertes,hist:viewHist,catalogue:viewCatalogue,users:viewUsers};
+  $('main').innerHTML=V[view]();
+  window.scrollTo(0,y);bind();
+}
+function bind(){
+  $('logout').onclick=()=>B.logout();
+  $('nav').onclick=e=>{const b=e.target.closest('button');if(b){view=b.dataset.v;window.scrollTo(0,0);render()}};
+  $('newMove').onclick=openModal;
+  if($('demoRole'))$('demoRole').onchange=async e=>{const v=e.target.value;await B.setUser(profile.id,v==='admin'?{role:'admin',agence:''}:{role:'agence',agence:v});profile=await B.profile(me);if(v!=='admin')viewAg=v;render()};
+  const q=$('q');if(q)q.oninput=e=>{fQ=e.target.value;const p=e.target.selectionStart;render();const n=$('q');n.focus();n.setSelectionRange(p,p)};
+  if($('viewAg'))$('viewAg').onchange=e=>{viewAg=e.target.value;render()};
+  if($('histAg'))$('histAg').onchange=e=>{histAg=e.target.value;render()};
+  if($('toggleAll'))$('toggleAll').onclick=()=>{open=open.size>=familles().length?new Set():new Set(familles());render()};
+  document.querySelectorAll('.famrow[data-fam]').forEach(r=>r.onclick=()=>{const f=r.dataset.fam;open.has(f)?open.delete(f):open.add(f);render()});
+  if($('export'))$('export').onclick=exportCsv;
+  if($('reset'))$('reset').onclick=async()=>{await B.resetDemo();toast('Démo remise à zéro')};
+  if($('sFam'))$('sFam').onchange=e=>{seuilFam=e.target.value;render()};
+  const val=el=>el.value===''?null:Math.max(0,parseInt(el.value)||0);
+  document.querySelectorAll('input[data-sid]').forEach(el=>el.onchange=async()=>{const id=el.dataset.sid,t={...(D.seuils[id]||{})};t[el.dataset.k]=val(el);
+    try{await B.setSeuil(id,t.min??null,t.max??null);toast('Exception enregistrée')}catch(x){toast('Enregistrement impossible : '+(x.code||x.message))}});
+  ['min','max'].forEach(k=>{const el=$('ff_'+k);if(el)el.onchange=async()=>{const t={...(D.seuilsFam[seuilFam]||{})};t[k]=val(el);
+    try{await B.setSeuilFam(seuilFam,t.min??null,t.max??null);toast('Seuil de la famille enregistré')}catch(x){toast('Enregistrement impossible : '+(x.code||x.message))}}});
+  if($('catFam'))$('catFam').onchange=e=>{catFam=e.target.value;render()};
+  if($('newArt'))$('newArt').onclick=()=>{editArt={famille:catFam,ref:'',designation:'',fournisseur:'',marque:'',modele:'',version:'',actif:true};drawArt()};
+  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editArt={...art(b.dataset.edit)};drawArt()});
+  if($('addFam'))$('addFam').onclick=async()=>{const n=$('newFam').value.trim();if(!n)return;if(familles().includes(n))return toast('Cette famille existe déjà.');await B.saveFamille(n);catFam=n;toast('Famille ajoutée')};
+  if($('initFam'))$('initFam').onclick=async()=>{await B.initFamilles();toast('Familles de départ créées')};
+  if($('addVeh'))$('addVeh').onclick=async()=>{const v={marque:$('nvMarque').value.trim(),modele:$('nvModele').value.trim(),version:$('nvVersion').value.trim(),gabarit:$('nvGab').value};
+    if(!v.marque||!v.modele||!v.version)return toast('Renseignez la marque, le modèle et la version.');await B.saveVehicule(v);toast('Véhicule ajouté')};
+  if($('doImp'))$('doImp').onclick=importRows;
+  document.querySelectorAll('[data-urole]').forEach(s=>s.onchange=async()=>{await B.setUser(s.dataset.urole,{role:s.value,...(s.value==='agence'?{}:{agence:''})});toast('Rôle enregistré')});
+  document.querySelectorAll('[data-uag]').forEach(s=>s.onchange=async()=>{await B.setUser(s.dataset.uag,{agence:s.value});toast('Agence enregistrée')});
+}
+async function importRows(){
+  const lines=$('imp').value.split(/\r?\n/).map(l=>l.split('\t').map(c=>c.trim())).filter(c=>c.some(Boolean));
+  const out=[],errs=[];
+  lines.forEach((c,i)=>{const[ref,famille,marque,modele,version,designation,fournisseur]=c;
+    if(!famille){errs.push(`ligne ${i+1} : famille manquante`);return}
+    if(!marque&&!ref&&!designation){errs.push(`ligne ${i+1} : il faut un code, une désignation ou un véhicule`);return}
+    out.push({ref:ref||'',famille,marque:marque||'',modele:modele||'',version:version||(marque?TOUTES:''),designation:designation||'',fournisseur:fournisseur||'',actif:true})});
+  if(!out.length){$('impInfo').textContent=errs[0]||'Rien à importer.';return}
+  for(const f of uniq(out.map(a=>a.famille)))if(!familles().includes(f))await B.saveFamille(f);
+  await B.saveArticles(out);$('imp').value='';
+  toast(`${out.length} article(s) importé(s)${errs.length?`, ${errs.length} ligne(s) ignorée(s)`:''}`);
+}
+function exportCsv(){
+  const t=$('tbl');const rows=[...t.rows].map(r=>[...r.cells].map(c=>'"'+c.innerText.replace('▸','').replace(/\s*\n\s*/g,' – ').trim().replace(/"/g,'""')+'"').join(';'));
+  const blob=new Blob(['﻿'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`AMS-stock-${view}-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();
+  toast('Fichier exporté : ouvrez-le avec Excel');
+}
+
+/* ---------- Fiche article (catalogue) ---------- */
+function drawArt(){
+  if(!editArt){$('modalRoot').innerHTML='';return}
+  const a=editArt;
+  $('modalRoot').innerHTML=`<div class="overlay" id="ov"><form class="modal" id="af"><h2>${a.id?'Modifier l’article':'Nouvel article'}</h2>
+   <div class="row2"><div class="field"><label for="af_f">Famille</label><select id="af_f">${familles().map(f=>`<option ${f===a.famille?'selected':''}>${esc(f)}</option>`).join('')}</select></div>
+     <div class="field"><label for="af_r">Code article (facultatif)</label><input id="af_r" value="${esc(a.ref)}" placeholder="Code fournisseur, ex. Edström"></div></div>
+   <div class="field"><label for="af_d">Désignation (facultatif si un véhicule est choisi)</label><input id="af_d" value="${esc(a.designation)}" placeholder="Ex. Montant 1800 mm"></div>
+   <div class="field"><label for="af_s">Fournisseur (facultatif)</label><input id="af_s" value="${esc(a.fournisseur)}"></div>
+   <div class="step"><span class="lab">Véhicule (facultatif)</span>${vehSelects('av',a)}</div>
+   <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="af_a" ${a.actif!==false?'checked':''}> Article actif (décocher pour l’archiver sans perdre l’historique)</label>
+   <div class="actions"><button type="button" class="btn ghost" id="af_c">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form></div>`;
+  const keep=()=>{a.famille=$('af_f').value;a.ref=$('af_r').value.trim();a.designation=$('af_d').value.trim();a.fournisseur=$('af_s').value.trim();a.actif=$('af_a').checked};
+  $('avm').onchange=e=>{keep();a.marque=e.target.value;a.modele='';a.version='';drawArt()};
+  $('avo').onchange=e=>{keep();a.modele=e.target.value;a.version='';drawArt()};
+  $('avv').onchange=e=>{a.version=e.target.value};
+  $('af_c').onclick=()=>{editArt=null;drawArt()};
+  $('ov').onclick=e=>{if(e.target.id==='ov'){editArt=null;drawArt()}};
+  $('af').onsubmit=async e=>{e.preventDefault();keep();
+    if(a.marque&&(!a.modele||!a.version))return toast('Choisissez le modèle et la version du véhicule.');
+    if(!a.marque){a.modele='';a.version=''}
+    if(!a.marque&&!a.ref&&!a.designation)return toast('Indiquez au moins un code, une désignation ou un véhicule.');
+    try{await B.saveArticle({...a});editArt=null;drawArt();toast('Article enregistré')}catch(x){toast('Enregistrement impossible : '+(x.code||x.message))}};
+}
+
+/* ---------- Fenêtre « + Mouvement » ---------- */
+const STEPS=[['marque','Marque'],['modele','Modèle'],['version','Version']];
+const NONE='__none';
+function openModal(){modal={type:'entree',ag:isAdmin()?viewAg:myAg(),to:'',fam:'',marque:'',modele:'',version:'',item:null,search:'',q:1,motif:MOTIFS[0],comment:''};drawModal()}
+function candidates(){
+  let c=actifs().filter(a=>a.famille===modal.fam);const steps=[];
+  for(const[k,lab]of STEPS){
+    if(k!=='marque'&&modal.marque===NONE)break;
+    const vals=uniq(c.map(a=>a[k]||NONE));
+    if(vals.length>1)steps.push({k,lab,vals});
+    if(!modal[k]&&vals.length===1)modal[k]=vals[0];
+    if(!modal[k])return{c,steps,stop:true};
+    c=c.filter(a=>(a[k]||NONE)===modal[k]);
+  }
+  return{c,steps,stop:false};
+}
+function picker(){
+  let h=`<div class="step"><span class="lab">Famille</span><div class="opts">${familles().map(f=>`<button type="button" data-fam="${esc(f)}" aria-pressed="${modal.fam===f}">${esc(f)}</button>`).join('')}</div></div>`;
+  if(!modal.fam)return h;
+  const{c,steps,stop}=candidates();
+  for(const s of steps)h+=`<div class="step"><span class="lab">${s.lab}</span><div class="opts">${s.vals.map(v=>`<button type="button" data-k="${s.k}" data-v="${esc(v)}" aria-pressed="${modal[s.k]===v}">${v===NONE?'Sans véhicule':esc(v)}</button>`).join('')}</div></div>`;
+  if(!stop){
+    if(c.length===1)modal.item=c[0].id;
+    else if(c.length>1){const q=norm(modal.search);const l=c.filter(a=>!q||norm(fullLabel(a)).includes(q)).sort((x,y)=>titre(x).localeCompare(titre(y),'fr'));
+      h+=`<div class="step"><label class="lab" for="m_s">Article</label><input type="search" id="m_s" placeholder="Code ou désignation" value="${esc(modal.search)}">
+      <div class="list" id="m_list">${l.map(a=>`<button type="button" data-item="${a.id}" aria-pressed="${modal.item===a.id}">${esc(titre(a))}${detail(a)?` <span class="ref">${esc(detail(a))}</span>`:''}</button>`).join('')||'<div class="empty">Aucun article ne correspond.</div>'}</div></div>`;
+      if(modal.item&&!c.some(a=>a.id===modal.item))modal.item=null;}
+    else h+='<p class="note">Aucun article dans cette famille. Le responsable logistique peut en ajouter dans le Catalogue.</p>';
+  }
+  if(modal.item)h+=`<div class="picked">Article choisi : <b>${esc(fullLabel(art(modal.item)))}</b></div>`;
+  return h;
+}
+function preview(){
+  const m=modal;if(!m.item)return{html:'Choisissez l’article : la famille d’abord, puis le véhicule ou le code.',lvl:''};
+  const id=m.item,q=Math.max(0,parseInt(m.q)||0),cur=qte(id,m.ag);let lines=[],lvl='';
+  const chk=(ag,after)=>{const t=seuil(id,ag);
+    if(after<0){lvl='bad';return ` Attention : stock négatif à ${ag}.`}
+    if(t&&t.min!=null&&after<t.min){lvl=lvl||'warn';return ` Alerte : passe sous le mini (${t.min}).`}
+    if(t&&t.max!=null&&after>t.max){lvl=lvl||'warn';return ` Alerte : dépasse le maxi (${t.max}).`}return''};
+  if(m.type==='entree')lines.push(`${m.ag} : ${cur} → <b>${cur+q}</b>.`+chk(m.ag,cur+q));
+  if(m.type==='sortie')lines.push(`${m.ag} : ${cur} → <b>${cur-q}</b>.`+chk(m.ag,cur-q));
+  if(m.type==='inventaire'){const d=q-cur;lines.push(`${m.ag} : ${cur} dans l’outil, ${q} compté(s) en rayon. Écart : <b>${d>0?'+':''}${d}</b>.`+chk(m.ag,q))}
+  if(m.type==='transfert'){if(!m.to)lines.push('Choisissez l’agence de destination.');else{const b=qte(id,m.to);
+    lines.push(`${m.ag} : ${cur} → <b>${cur-q}</b>.`+chk(m.ag,cur-q));lines.push(`${m.to} : ${b} → <b>${b+q}</b>.`+chk(m.to,b+q))}}
+  if(lvl)lines.push('<b>Le mouvement reste possible : l’alerte est seulement informative.</b>');
+  return{html:lines.join('<br>'),lvl};
+}
+const HELP={entree:'Marchandise reçue dans l’agence (livraison fournisseur).',sortie:'Article vendu, posé sur un véhicule, cassé ou perdu.',transfert:'Envoi d’une agence vers une autre : une seule saisie pour les deux agences.',inventaire:'Après un comptage en rayon : saisissez la quantité réellement présente, l’outil corrige le stock et garde l’écart.'};
+function drawModal(focusSearch){
+  if(!modal){$('modalRoot').innerHTML='';return}
+  const m=modal,T=[['entree','Entrée'],['sortie','Sortie'],['transfert','Transfert'],['inventaire','Inventaire']];
+  const pk=picker(),p=preview();
+  $('modalRoot').innerHTML=`<div class="overlay" id="ov"><form class="modal" id="mf" aria-labelledby="mt">
+   <h2 id="mt">Nouveau mouvement</h2>
+   <div class="seg" role="group" aria-label="Type">${T.map(([k,l])=>`<button type="button" data-t="${k}" aria-pressed="${m.type===k}">${l}</button>`).join('')}</div>
+   <p class="note">${HELP[m.type]}</p>
+   <div class="row2">
+    <div class="field"><label for="m_ag">${m.type==='transfert'?'Depuis l’agence':'Agence'}</label>
+     <select id="m_ag" ${isAdmin()?'':'disabled'}>${AGENCES.map(a=>`<option ${a===m.ag?'selected':''}>${a}</option>`).join('')}</select></div>
+    ${m.type==='transfert'?`<div class="field"><label for="m_to">Vers l’agence</label><select id="m_to"><option value="">Choisir…</option>${AGENCES.filter(a=>a!==m.ag).map(a=>`<option ${a===m.to?'selected':''}>${a}</option>`).join('')}</select></div>`:
+     m.type==='sortie'?`<div class="field"><label for="m_motif">Motif</label><select id="m_motif">${MOTIFS.map(x=>`<option ${x===m.motif?'selected':''}>${x}</option>`).join('')}</select></div>`:'<div></div>'}
+   </div>
+   ${pk}
+   <div class="field"><label for="m_q">${m.type==='inventaire'?'Quantité comptée en rayon':'Quantité'}</label><input id="m_q" type="number" min="0" inputmode="numeric" value="${esc(m.q)}"></div>
+   <div class="field"><label for="m_c">Commentaire (facultatif)</label><input id="m_c" value="${esc(m.comment)}" placeholder="N° de BL, nom du client…"></div>
+   <div class="preview ${p.lvl}" id="pv">${p.html}</div>
+   <div class="actions"><button type="button" class="btn ghost" id="m_cancel">Annuler</button><button class="btn" type="submit" id="m_ok">Enregistrer</button></div>
+  </form></div>`;
+  const redraw=()=>drawModal();
+  document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{modal.type=b.dataset.t;if(modal.to===modal.ag)modal.to='';redraw()});
+  document.querySelectorAll('.opts [data-fam]').forEach(b=>b.onclick=()=>{Object.assign(modal,{fam:b.dataset.fam,marque:'',modele:'',version:'',item:null,search:''});redraw()});
+  document.querySelectorAll('.opts [data-k]').forEach(b=>b.onclick=()=>{const i=STEPS.findIndex(s=>s[0]===b.dataset.k);modal[b.dataset.k]=b.dataset.v;STEPS.slice(i+1).forEach(([k])=>modal[k]='');modal.item=null;modal.search='';redraw()});
+  document.querySelectorAll('[data-item]').forEach(b=>b.onclick=()=>{modal.item=b.dataset.item;redraw()});
+  if($('m_s')){$('m_s').oninput=e=>{modal.search=e.target.value;drawModal(true)};if(focusSearch){const s=$('m_s');s.focus();s.setSelectionRange(s.value.length,s.value.length)}}
+  const live=(id,k,re)=>{const el=$(id);if(!el)return;el.addEventListener(el.tagName==='SELECT'?'change':'input',e=>{modal[k]=e.target.value;if(re)redraw();else{const p=preview(),pv=$('pv');pv.className='preview '+p.lvl;pv.innerHTML=p.html}})};
+  live('m_ag','ag',true);live('m_to','to',false);live('m_motif','motif',false);live('m_q','q',false);live('m_c','comment',false);
+  $('m_cancel').onclick=()=>{modal=null;drawModal()};
+  $('ov').onclick=e=>{if(e.target.id==='ov'){modal=null;drawModal()}};
+  $('mf').onsubmit=e=>{e.preventDefault();submitMove()};
+}
+async function submitMove(){
+  const m=modal,q=parseInt(m.q);
+  if(!m.item)return toast('Choisissez l’article.');
+  if(!(q>=0)||(q===0&&m.type!=='inventaire'))return toast('Indiquez une quantité supérieure à 0.');
+  if(m.type==='transfert'&&!m.to)return toast('Choisissez l’agence de destination.');
+  const p=preview(),mv={date:new Date().toISOString(),type:m.type,ag:m.ag,articleId:m.item,q,uid:me.uid,userEmail:me.email,comment:m.comment.trim()};
+  if(m.type==='sortie')mv.motif=m.motif;if(m.type==='transfert')mv.to=m.to;
+  $('m_ok').disabled=true;
+  try{await B.mouvement(mv);open.add(art(m.item).famille);modal=null;drawModal();toast(p.lvl?'Mouvement enregistré, avec une alerte de seuil':'Mouvement enregistré')}
+  catch(x){$('m_ok').disabled=false;toast('Enregistrement impossible : '+(x.code||x.message))}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(modal){modal=null;drawModal()}if(editArt){editArt=null;drawArt()}}});
+
+/* ============================================================
+   Démarrage
+   ============================================================ */
+(async()=>{
+  try{B=FIREBASE_CONFIG?await FirebaseBackend(FIREBASE_CONFIG):LocalBackend()}
+  catch(e){$('app').innerHTML='<div class="login"><h1>Connexion impossible</h1><p class="note">La base de données ne répond pas. Vérifiez votre connexion internet puis rechargez la page.</p></div>';return}
+  B.subscribe(d=>{D=d;if(me&&profile&&profile.role!=='attente'&&!modal&&!editArt&&!(document.activeElement&&['INPUT','TEXTAREA'].includes(document.activeElement.tagName)&&document.activeElement.id!=='q'))render()});
+  B.onAuth(async u=>{me=u;profile=null;if(!u){render();return}
+    try{profile=await B.profile(u)}catch(e){console.error(e);toast('Profil illisible : vérifiez les règles Firestore.');return}
+    if(profile.agence){viewAg=profile.agence;seuilAg=profile.agence}render()});
+})();
+</script>
+</body>
+</html>
