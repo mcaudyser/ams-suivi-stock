@@ -157,6 +157,8 @@ let tt;function toast(m){$('toastRoot').innerHTML=`<div class="toast" role="stat
    Couche de données : Firebase ou mode démo (navigateur)
    Les deux exposent les mêmes fonctions.
    ============================================================ */
+const normId=v=>String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'.').replace(/[^a-z0-9._-]/g,'');
+const ROLE_OK=r=>r==='admin'||r==='agence';
 function emptyData(){return{familles:[],articles:[],stock:{},seuils:{},seuilsFam:{},mouvements:[],vehicules:[],users:[]}}
 
 function applyMove(stock,m){ // retourne les nouvelles quantités {key:qte}
@@ -177,7 +179,11 @@ function LocalBackend(){
   return{
     demo:true,
     onAuth(cb){authCb=cb;setTimeout(()=>cb(current),0)},
-    async login(email){current={uid:'demo-'+norm(email),email};if(!D.users.find(u=>u.id===current.uid))D.users.push({id:current.uid,email,role:'admin',agence:''});save();authCb(current)},
+    async needsSetup(){return false},
+    async login(ident){const id=normId(ident)||'demo';current={uid:'demo-'+id,email:id};if(!D.users.find(u=>u.id===current.uid))D.users.push({id:current.uid,identifiant:id,role:'admin',agence:'',actif:true});save();authCb(current)},
+    async createUser(u){if(D.users.find(x=>x.identifiant===u.identifiant))throw new Error('Cet identifiant existe déjà.');D.users.push({id:nid(),identifiant:u.identifiant,role:u.role,agence:u.agence,actif:true});save()},
+    async resetPw(){},
+    async setActif(u,v){u.actif=v;save()},
     async logout(){current=null;authCb(null)},
     subscribe(cb){listeners.push(cb);cb(D)},
     async profile(u){return D.users.find(x=>x.id===u.uid)},
@@ -216,7 +222,10 @@ async function FirebaseBackend(cfg){
   const A=await import(base+'firebase-auth.js');
   const F=await import(base+'firebase-firestore.js');
   const app=initializeApp(cfg),auth=A.getAuth(app),fs=F.getFirestore(app);
-  const D=emptyData();let listeners=[],unsubs=[];
+  const D=emptyData();let listeners=[],unsubs=[],authCb=null,app2=null;
+  const DOM='ams-stock.app',now=()=>new Date().toISOString();
+  const mkEmail=id=>`${id}.${Date.now().toString(36)}@${DOM}`;
+  async function newAuthUser(id,pw){if(!app2)app2=initializeApp(cfg,'creation');const a2=A.getAuth(app2);const c=await A.createUserWithEmailAndPassword(a2,mkEmail(id),pw);await A.signOut(a2);return{uid:c.user.uid,email:c.user.email}}
   const emit=()=>listeners.forEach(f=>f(D));
   function listen(isAdmin){
     unsubs.forEach(u=>u());unsubs=[];
@@ -232,15 +241,36 @@ async function FirebaseBackend(cfg){
   }
   return{
     demo:false,
-    onAuth(cb){A.onAuthStateChanged(auth,u=>cb(u?{uid:u.uid,email:u.email}:null))},
-    async login(email,pw){await A.signInWithEmailAndPassword(auth,email,pw)},
-    async resetPassword(email){await A.sendPasswordResetEmail(auth,email)},
+    onAuth(cb){authCb=cb;A.onAuthStateChanged(auth,u=>cb(u?{uid:u.uid,email:u.email}:null))},
+    async needsSetup(){return !(await F.getDoc(F.doc(fs,'config','setup'))).exists()},
+    async setupAdmin(id,pw){
+      const c=await A.createUserWithEmailAndPassword(auth,mkEmail(id),pw),uid=c.user.uid,email=c.user.email;
+      const b=F.writeBatch(fs);
+      b.set(F.doc(fs,'config','setup'),{admin:uid,le:now()});
+      b.set(F.doc(fs,'users',uid),{identifiant:id,role:'admin',agence:'',actif:true,email,creeLe:now()});
+      b.set(F.doc(fs,'identifiants',id),{email,uid,actif:true});
+      await b.commit();authCb&&authCb({uid,email});
+    },
+    async login(ident,pw){let email=ident.trim();
+      if(!email.includes('@')){const s=await F.getDoc(F.doc(fs,'identifiants',normId(email)));if(!s.exists()||s.data().actif===false)throw new Error('inconnu');email=s.data().email}
+      await A.signInWithEmailAndPassword(auth,email,pw)},
+    async createUser(u){
+      if((await F.getDoc(F.doc(fs,'identifiants',u.identifiant))).exists())throw new Error('Cet identifiant existe déjà.');
+      const n=await newAuthUser(u.identifiant,u.pw),b=F.writeBatch(fs);
+      b.set(F.doc(fs,'users',n.uid),{identifiant:u.identifiant,role:u.role,agence:u.agence,actif:true,email:n.email,creeLe:now()});
+      b.set(F.doc(fs,'identifiants',u.identifiant),{email:n.email,uid:n.uid,actif:true});await b.commit()},
+    async resetPw(u,pw){
+      const n=await newAuthUser(u.identifiant,pw),b=F.writeBatch(fs);
+      b.set(F.doc(fs,'users',n.uid),{identifiant:u.identifiant,role:u.role,agence:u.agence||'',actif:true,email:n.email,creeLe:now()});
+      b.update(F.doc(fs,'users',u.id),{actif:false,remplace:true});
+      b.set(F.doc(fs,'identifiants',u.identifiant),{email:n.email,uid:n.uid,actif:true});await b.commit()},
+    async setActif(u,v){const b=F.writeBatch(fs);b.update(F.doc(fs,'users',u.id),{actif:v});b.update(F.doc(fs,'identifiants',u.identifiant),{actif:v});await b.commit()},
     async logout(){unsubs.forEach(u=>u());unsubs=[];await A.signOut(auth)},
     subscribe(cb){listeners.push(cb);cb(D)},
     async profile(u){
-      const ref=F.doc(fs,'users',u.uid);let snap=await F.getDoc(ref);
-      if(!snap.exists()){await F.setDoc(ref,{email:u.email,role:'attente',agence:'',creeLe:new Date().toISOString()});snap=await F.getDoc(ref)}
-      const p={id:u.uid,...snap.data()};if(p.role!=='attente')listen(p.role==='admin');return p;
+      const snap=await F.getDoc(F.doc(fs,'users',u.uid));
+      if(!snap.exists())return{id:u.uid,role:'inconnu'};
+      const p={id:u.uid,...snap.data()};if(p.actif===false)p.role='inconnu';if(ROLE_OK(p.role))listen(p.role==='admin');return p;
     },
     async mouvement(m){
       await F.runTransaction(fs,async tx=>{
@@ -293,22 +323,38 @@ const isOpen=f=>open.has(f)||!!fQ.trim();
    Écrans
    ============================================================ */
 function renderLogin(err=''){
+  if(B.setup)return renderSetup(err);
   $('app').innerHTML=`<form class="login" id="lf">
     <img src="logo-ams.png" alt="AMS Auto Multi Services">
     <h1>Suivi de stock</h1>
-    ${B.demo?'<p class="demo">Mode démo : aucune base n’est encore branchée. Saisissez n’importe quel e-mail pour essayer l’outil avec des données d’exemple.</p>':''}
-    <div class="field"><label for="le">E-mail</label><input id="le" type="email" autocomplete="username" required></div>
+    ${B.demo?'<p class="demo">Mode démo : aucune base n’est encore branchée. Saisissez n’importe quel identifiant pour essayer l’outil avec des données d’exemple.</p>':''}
+    <div class="field"><label for="le">Identifiant</label><input id="le" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
     ${B.demo?'':'<div class="field"><label for="lp">Mot de passe</label><input id="lp" type="password" autocomplete="current-password" required></div>'}
     ${err?`<div class="err">${esc(err)}</div>`:''}
     <button class="btn" type="submit">Se connecter</button>
-    ${B.demo?'':'<button class="btn ghost" type="button" id="forgot">Mot de passe oublié</button>'}
+    ${B.demo?'':'<p class="note" style="text-align:center">Mot de passe oublié : demandez-en un nouveau au responsable logistique.</p>'}
   </form>`;
-  $('lf').onsubmit=async e=>{e.preventDefault();try{await B.login($('le').value.trim(),$('lp')?.value)}catch(x){renderLogin('E-mail ou mot de passe incorrect.')}};
-  if($('forgot'))$('forgot').onclick=async()=>{const em=$('le').value.trim();if(!em)return renderLogin('Saisissez d’abord votre e-mail.');try{await B.resetPassword(em);toast('E-mail de réinitialisation envoyé.')}catch(x){renderLogin('Impossible d’envoyer l’e-mail. Vérifiez l’adresse.')}};
+  $('lf').onsubmit=async e=>{e.preventDefault();try{await B.login($('le').value,$('lp')?.value)}catch(x){renderLogin('Identifiant ou mot de passe incorrect.')}};
+}
+function renderSetup(err=''){
+  $('app').innerHTML=`<form class="login" id="sf">
+    <img src="logo-ams.png" alt="AMS Auto Multi Services">
+    <h1>Première mise en route</h1>
+    <p class="note" style="text-align:center">Créez le compte du responsable logistique. Il pourra ensuite créer les accès des agences depuis l’onglet Utilisateurs.</p>
+    <div class="field"><label for="se">Identifiant</label><input id="se" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ex. mathis" required></div>
+    <div class="field"><label for="sp">Mot de passe (6 caractères minimum)</label><input id="sp" type="password" autocomplete="new-password" minlength="6" required></div>
+    <div class="field"><label for="sp2">Confirmer le mot de passe</label><input id="sp2" type="password" autocomplete="new-password" minlength="6" required></div>
+    ${err?`<div class="err">${esc(err)}</div>`:''}
+    <button class="btn" type="submit">Créer le compte administrateur</button>
+  </form>`;
+  $('sf').onsubmit=async e=>{e.preventDefault();const id=normId($('se').value),pw=$('sp').value;
+    if(!id)return renderSetup('Identifiant invalide (lettres, chiffres, point ou tiret).');
+    if(pw!==$('sp2').value)return renderSetup('Les deux mots de passe ne correspondent pas.');
+    try{await B.setupAdmin(id,pw);B.setup=false}catch(x){console.error(x);B.setup=await B.needsSetup().catch(()=>false);renderLogin(B.setup?'Création impossible : '+(x.code||x.message):'Le compte administrateur existe déjà. Connectez-vous.')}};
 }
 function renderWaiting(){
-  $('app').innerHTML=`<div class="login"><img src="logo-ams.png" alt="AMS"><h1>Compte en attente</h1>
-  <p class="note" style="text-align:center">Votre compte (${esc(me.email)}) est créé. Le responsable logistique doit maintenant vous rattacher à votre agence.</p>
+  $('app').innerHTML=`<div class="login"><img src="logo-ams.png" alt="AMS"><h1>Accès non reconnu</h1>
+  <p class="note" style="text-align:center">Cet accès n’est pas actif. Contactez le responsable logistique.</p>
   <button class="btn ghost" id="lo">Se déconnecter</button></div>`;$('lo').onclick=()=>B.logout();
 }
 function shell(){
@@ -319,7 +365,7 @@ function shell(){
   if(B.demo)demoRole=`<label for="demoRole">Rôle (démo)</label><select id="demoRole">${AGENCES.map(a=>`<option value="${a}" ${profile.role==='agence'&&profile.agence===a?'selected':''}>Responsable ${a}</option>`).join('')}<option value="admin" ${isAdmin()?'selected':''}>Responsable logistique</option></select>`;
   return `<header><div class="wrap top">
     <div class="brand"><img src="logo-ams.png" alt="AMS Auto Multi Services"> Suivi de stock</div>
-    <div class="who">${demoRole||`<span>${esc(me.email)} · ${isAdmin()?'Responsable logistique':'Agence '+esc(myAg())}</span>`}
+    <div class="who">${demoRole||`<span>${esc(profile.identifiant||me.email)} · ${isAdmin()?'Responsable logistique':'Agence '+esc(myAg())}</span>`}
       <button class="btn ghost small" id="logout">Déconnexion</button></div></div>
     <div class="wrap" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between">
       <nav id="nav">${tabs.map(([k,l])=>`<button data-v="${k}" ${view===k?'aria-current="page"':''}>${l}</button>`).join('')}</nav>
@@ -433,18 +479,29 @@ function viewCatalogue(){
   <div class="bar"><select id="nvGab"><option>Petit</option><option selected>Moyen</option><option>Grand</option></select><button class="btn ghost" id="addVeh">Ajouter le véhicule</button></div>`;
 }
 function viewUsers(){
-  const rows=D.users.sort((a,b)=>(a.role==='attente'?0:1)-(b.role==='attente'?0:1)).map(u=>`<tr><td>${esc(u.email)}</td>
-    <td><select data-urole="${u.id}" aria-label="Rôle">${[['attente','En attente'],['agence','Responsable d’agence'],['admin','Responsable logistique']].map(([k,l])=>`<option value="${k}" ${u.role===k?'selected':''}>${l}</option>`).join('')}</select></td>
-    <td><select data-uag="${u.id}" aria-label="Agence" ${u.role==='agence'?'':'disabled'}><option value="">–</option>${AGENCES.map(a=>`<option ${a===u.agence?'selected':''}>${a}</option>`).join('')}</select></td></tr>`).join('');
+  const list=D.users.filter(u=>!u.remplace&&u.identifiant).sort((a,b)=>(a.actif===false)-(b.actif===false)||a.identifiant.localeCompare(b.identifiant));
+  const roleSel=(id,v)=>`<select ${id} aria-label="Rôle">${[['agence','Responsable d’agence'],['admin','Responsable logistique']].map(([k,l])=>`<option value="${k}" ${v===k?'selected':''}>${l}</option>`).join('')}</select>`;
+  const agSel=(id,v,dis)=>`<select ${id} aria-label="Agence" ${dis?'disabled':''}><option value="">–</option>${AGENCES.map(a=>`<option ${a===v?'selected':''}>${a}</option>`).join('')}</select>`;
+  const rows=list.map(u=>{const self=u.id===profile.id,off=u.actif===false;return `<tr${off?' style="opacity:.55"':''}><td><b>${esc(u.identifiant)}</b>${off?' <span class="sub">(désactivé)</span>':''}</td>
+    <td>${self?'Responsable logistique (vous)':roleSel(`data-urole="${u.id}"`,u.role)}</td>
+    <td>${self?'–':agSel(`data-uag="${u.id}"`,u.agence,u.role!=='agence')}</td>
+    <td>${self?'':`<button class="btn ghost small" data-upw="${u.id}">Nouveau mot de passe</button> <button class="btn ghost small" data-uact="${u.id}">${off?'Réactiver':'Désactiver'}</button>`}</td></tr>`}).join('');
   return `<div class="bar"><h1>Utilisateurs</h1></div>
-  <p class="note">Pour ajouter quelqu’un : créez son compte (e-mail et mot de passe) dans la console Firebase, rubrique Authentication. À sa première connexion, il apparaît ici « En attente » : choisissez son rôle et son agence.</p>
-  <div class="panel"><table><thead><tr><th>E-mail</th><th>Rôle</th><th>Agence</th></tr></thead><tbody>${rows||'<tr><td colspan="3" class="empty">Aucun utilisateur.</td></tr>'}</tbody></table></div>`;
+  <h2 class="sec">Créer un accès</h2>
+  <div class="panel" style="padding:14px">
+    <div class="row3"><input id="nuId" placeholder="Identifiant (ex. chartres)" autocapitalize="none" spellcheck="false"><input id="nuPw" type="text" placeholder="Mot de passe (6 caractères min.)" autocomplete="off"><span></span></div>
+    <div class="bar" style="margin-top:8px">${roleSel('id="nuRole"','agence')}${agSel('id="nuAg"','',false)}<button class="btn" id="nuOk">Créer l’accès</button></div>
+    <p class="note">Communiquez l’identifiant et le mot de passe à la personne. En cas d’oubli, cliquez sur « Nouveau mot de passe » dans la liste.</p>
+  </div>
+  <h2 class="sec">Accès existants</h2>
+  <div class="panel"><table><thead><tr><th>Identifiant</th><th>Rôle</th><th>Agence</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="empty">Aucun utilisateur.</td></tr>'}</tbody></table></div>
+  <div id="pwBox"></div>`;
 }
 
 function render(){
   if(!me){renderLogin();return}
   if(!profile)return;
-  if(profile.role==='attente'){renderWaiting();return}
+  if(!ROLE_OK(profile.role)){renderWaiting();return}
   if(!isAdmin())viewAg=myAg();
   const y=window.scrollY;
   $('app').innerHTML=shell();
@@ -479,6 +536,14 @@ function bind(){
     if(!v.marque||!v.modele||!v.version)return toast('Renseignez la marque, le modèle et la version.');await B.saveVehicule(v);toast('Véhicule ajouté')};
   if($('doImp'))$('doImp').onclick=importRows;
   document.querySelectorAll('[data-urole]').forEach(s=>s.onchange=async()=>{await B.setUser(s.dataset.urole,{role:s.value,...(s.value==='agence'?{}:{agence:''})});toast('Rôle enregistré')});
+  if($('nuRole'))$('nuRole').onchange=()=>{$('nuAg').disabled=$('nuRole').value!=='agence'};
+  if($('nuOk'))$('nuOk').onclick=async()=>{const u={identifiant:normId($('nuId').value),pw:$('nuPw').value,role:$('nuRole').value,agence:$('nuRole').value==='agence'?$('nuAg').value:''};
+    if(!u.identifiant)return toast('Saisissez un identifiant.');if(u.pw.length<6)return toast('Mot de passe : 6 caractères minimum.');if(u.role==='agence'&&!u.agence)return toast('Choisissez l’agence.');
+    $('nuOk').disabled=true;try{await B.createUser(u);toast('Accès « '+u.identifiant+' » créé');$('nuId').value='';$('nuPw').value=''}catch(x){toast(x.code==='auth/weak-password'?'Mot de passe trop faible.':(x.message||x.code))}finally{if($('nuOk'))$('nuOk').disabled=false}};
+  document.querySelectorAll('[data-uact]').forEach(b=>b.onclick=async()=>{const u=D.users.find(x=>x.id===b.dataset.uact);await B.setActif(u,u.actif===false);toast(u.actif===false?'Accès réactivé':'Accès désactivé')});
+  document.querySelectorAll('[data-upw]').forEach(b=>b.onclick=()=>{const u=D.users.find(x=>x.id===b.dataset.upw);
+    $('pwBox').innerHTML=`<div class="panel" style="padding:14px;margin-top:12px"><b>Nouveau mot de passe pour ${esc(u.identifiant)}</b><div class="bar" style="margin-top:8px"><input id="npw" type="text" placeholder="6 caractères minimum" autocomplete="off"><button class="btn" id="npwOk">Enregistrer</button></div></div>`;$('npw').focus();
+    $('npwOk').onclick=async()=>{const pw=$('npw').value;if(pw.length<6)return toast('6 caractères minimum.');$('npwOk').disabled=true;try{await B.resetPw(u,pw);$('pwBox').innerHTML='';toast('Mot de passe changé pour « '+u.identifiant+' »')}catch(x){$('npwOk').disabled=false;toast(x.message||x.code)}}});
   document.querySelectorAll('[data-uag]').forEach(s=>s.onchange=async()=>{await B.setUser(s.dataset.uag,{agence:s.value});toast('Agence enregistrée')});
 }
 async function importRows(){
@@ -610,7 +675,7 @@ async function submitMove(){
   if(!m.item)return toast('Choisissez l’article.');
   if(!(q>=0)||(q===0&&m.type!=='inventaire'))return toast('Indiquez une quantité supérieure à 0.');
   if(m.type==='transfert'&&!m.to)return toast('Choisissez l’agence de destination.');
-  const p=preview(),mv={date:new Date().toISOString(),type:m.type,ag:m.ag,articleId:m.item,q,uid:me.uid,userEmail:me.email,comment:m.comment.trim()};
+  const p=preview(),mv={date:new Date().toISOString(),type:m.type,ag:m.ag,articleId:m.item,q,uid:me.uid,userEmail:profile.identifiant||me.email,comment:m.comment.trim()};
   if(m.type==='sortie')mv.motif=m.motif;if(m.type==='transfert')mv.to=m.to;
   $('m_ok').disabled=true;
   try{await B.mouvement(mv);open.add(art(m.item).famille);modal=null;drawModal();toast(p.lvl?'Mouvement enregistré, avec une alerte de seuil':'Mouvement enregistré')}
@@ -622,9 +687,9 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(modal){modal=nul
    Démarrage
    ============================================================ */
 (async()=>{
-  try{B=FIREBASE_CONFIG?await FirebaseBackend(FIREBASE_CONFIG):LocalBackend()}
+  try{B=FIREBASE_CONFIG?await FirebaseBackend(FIREBASE_CONFIG):LocalBackend();B.setup=await B.needsSetup()}
   catch(e){$('app').innerHTML='<div class="login"><h1>Connexion impossible</h1><p class="note">La base de données ne répond pas. Vérifiez votre connexion internet puis rechargez la page.</p></div>';return}
-  B.subscribe(d=>{D=d;if(me&&profile&&profile.role!=='attente'&&!modal&&!editArt&&!(document.activeElement&&['INPUT','TEXTAREA'].includes(document.activeElement.tagName)&&document.activeElement.id!=='q'))render()});
+  B.subscribe(d=>{D=d;if(me&&profile&&ROLE_OK(profile.role)&&!modal&&!editArt&&!(document.activeElement&&['INPUT','TEXTAREA'].includes(document.activeElement.tagName)&&document.activeElement.id!=='q'))render()});
   B.onAuth(async u=>{me=u;profile=null;if(!u){render();return}
     try{profile=await B.profile(u)}catch(e){console.error(e);toast('Profil illisible : vérifiez les règles Firestore.');return}
     if(profile.agence){viewAg=profile.agence;seuilAg=profile.agence}render()});

@@ -13,17 +13,20 @@ Tant qu'aucune base n'est branchée, il fonctionne en **mode démo** : les donn�
 6. Dans `index.html`, remplacer `const FIREBASE_CONFIG = null;` par cet objet.
 7. **Mettre en ligne** sur GitHub Pages (même méthode que le simulateur de devis), puis ajouter l'adresse du site dans Firebase > Authentication > Paramètres > Domaines autorisés.
 
+## Adresse du site
+
+https://mcaudyser.github.io/ams-suivi-stock/ (projet Firebase `ams-stock`, dépôt GitHub `mcaudyser/ams-suivi-stock`).
+
 ## Premier compte responsable logistique
 
-1. Dans Authentication > Utilisateurs, créer son compte (e-mail et mot de passe).
-2. Se connecter une fois sur l'outil : le compte apparaît « en attente ».
-3. Dans Firestore > `users` > ce compte, remplacer `role: "attente"` par `role: "admin"`.
-4. Recharger la page. La suite (familles de départ, articles, comptes des agences) se fait depuis l'outil.
+1. Ouvrir le site : l'écran « Première mise en route » s'affiche.
+2. Choisir un identifiant (ex. `mathis`) et un mot de passe. Ce compte devient administrateur.
 
 ## Ajouter un responsable d'agence
 
-1. Créer son compte dans Firebase > Authentication.
-2. Il se connecte une fois, puis le responsable logistique choisit son rôle et son agence dans l'onglet **Utilisateurs**.
+1. Onglet **Utilisateurs** > « Créer un accès » : identifiant (ex. `chartres`), mot de passe, agence.
+2. Communiquer l'identifiant et le mot de passe à la personne.
+3. Mot de passe oublié : bouton « Nouveau mot de passe ». Départ : bouton « Désactiver ».
 
 ## Remplir le catalogue
 

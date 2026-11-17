@@ -1,23 +1,38 @@
 rules_version = '2';
 // Règles de sécurité Firestore – AMS Suivi de stock
-// - Personne ne lit ni n'écrit sans être connecté.
-// - Un compte "en attente" ne voit rien tant que le responsable logistique ne l'a pas rattaché.
+// - Connexion par identifiant simple ; les accès sont créés par le responsable logistique dans l'outil.
+// - Le tout premier compte (administrateur) est créé à la première mise en route.
+// - Un accès désactivé ne voit plus rien.
 // - Responsables d'agence : lecture de tout le stock, saisie des mouvements.
 // - Responsable logistique (admin) : en plus, catalogue, seuils et utilisateurs.
 // - L'historique des mouvements ne peut être ni modifié ni supprimé.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function hasProf() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
     function prof() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function isAdmin() { return signedIn() && prof().role == 'admin'; }
-    function isStaff() { return signedIn() && prof().role in ['admin', 'agence']; }
+    function actif() { return prof().get('actif', true) == true; }
+    function isAdmin() { return hasProf() && prof().role == 'admin' && actif(); }
+    function isStaff() { return hasProf() && prof().role in ['admin', 'agence'] && actif(); }
+    function setupPath() { return /databases/$(database)/documents/config/setup; }
+    function firstSetup() {
+      return signedIn() && !exists(setupPath()) && existsAfter(setupPath())
+             && getAfter(setupPath()).data.admin == request.auth.uid;
+    }
 
+    match /config/{doc} {
+      allow get: if true;
+      allow create: if doc == 'setup' && signedIn() && request.resource.data.admin == request.auth.uid;
+    }
+    // Identifiant -> adresse technique de connexion (lisible un par un, pour la page de connexion).
+    match /identifiants/{id} {
+      allow get: if true;
+      allow create, update: if isAdmin() || (firstSetup() && request.resource.data.uid == request.auth.uid);
+    }
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow create: if signedIn() && request.auth.uid == uid
-                    && request.resource.data.role == 'attente'
-                    && request.resource.data.email == request.auth.token.email;
-      allow update, delete: if isAdmin();
+      allow create: if isAdmin() || (firstSetup() && request.auth.uid == uid && request.resource.data.role == 'admin');
+      allow update: if isAdmin();
     }
     match /familles/{id}  { allow read: if isStaff(); allow write: if isAdmin(); }
     match /articles/{id}  { allow read: if isStaff(); allow write: if isAdmin(); }
